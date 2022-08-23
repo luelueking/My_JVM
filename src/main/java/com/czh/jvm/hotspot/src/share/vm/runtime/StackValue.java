@@ -1,5 +1,7 @@
 package com.czh.jvm.hotspot.src.share.vm.runtime;
 
+import com.czh.jvm.hotspot.src.share.tools.DataTranslate;
+import com.czh.jvm.hotspot.src.share.vm.utilities.BasicType;
 import lombok.Data;
 
 
@@ -36,26 +38,26 @@ public class StackValue {
         this.object = val;
     }
 
-//    public StackValue(int type, float v) {
-//        this.type = type;
-//        this.data = DataTranslate.floatToByte(v);
-//    }
+    public StackValue(int type, float v) {
+        this.type = type;
+        this.data = DataTranslate.floatToByte(v);
+    }
+
+    public StackValue(int type, long v) {
+        this.type = type;
+        this.data = DataTranslate.longToBytes(v);
+    }
 //
-//    public StackValue(int type, long v) {
-//        this.type = type;
-//        this.data = DataTranslate.longToBytes(v);
-//    }
-//
-//    public Object getData() {
-//        switch (type) {
-//            case BasicType.T_FLOAT:
-//                return DataTranslate.byteToFloat(data);
-//            case BasicType.T_LONG:
-//                return DataTranslate.bytesToLong(data);
-//            case BasicType.T_INT:
-//                return val;
-//        }
-//
-//        return null;
-//    }
+    public Object getData() {
+        switch (type) {
+            case BasicType.T_FLOAT:
+                return DataTranslate.byteToFloat(data);
+            case BasicType.T_LONG:
+                return DataTranslate.bytesToLong(data);
+            case BasicType.T_INT:
+                return val;
+        }
+
+        return null;
+    }
 }

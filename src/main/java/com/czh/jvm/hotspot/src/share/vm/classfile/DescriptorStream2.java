@@ -81,10 +81,14 @@ public class DescriptorStream2 extends ResourceObj {
     public Class<?>[] getParamsType() {
         Class<?>[] types = new Class[getMethodParamsSize()];
 
-        for (int i = 0; i < getMethodParamsSize(); i++) {
+        for (int i = getMethodParamsSize() - 1; i >= 0; i--) {
             DescriptorInfo info = getParameters().get(i);
 
             switch (info.getType()) {
+                case BasicType.T_BOOLEAN:
+                    types[i] = boolean.class;
+
+                    break;
                 case BasicType.T_CHAR:
                     types[i] = char.class;
 
@@ -109,6 +113,10 @@ public class DescriptorStream2 extends ResourceObj {
                     types[i] = double.class;
 
                     break;
+                case BasicType.T_FLOAT:
+                    types[i] = float.class;
+
+                    break;
                 case BasicType.T_ARRAY:
                     throw new Error("数组类型，未作处理");
                 default:
@@ -122,12 +130,17 @@ public class DescriptorStream2 extends ResourceObj {
     public Object[] getParamsVal(JavaVFrame frame) {
         Object[] vals = new Object[getMethodParamsSize()];
 
-        for (int i = 0; i < getMethodParamsSize(); i++) {
+        for (int i = getMethodParamsSize() - 1; i >= 0; i--) {
             DescriptorInfo info = getParameters().get(i);
 
             switch (info.getType()) {
+                case BasicType.T_BOOLEAN:
+                    int val = frame.getStack().pop().getVal();
+                    vals[i] = (1 == val)? true : false;
+
+                    break;
                 case BasicType.T_CHAR:
-                    vals[i] = frame.getStack().pop().getVal();
+                    vals[i] = (char) frame.getStack().pop().getVal();
 
                     break;
                 case BasicType.T_INT:
@@ -139,11 +152,15 @@ public class DescriptorStream2 extends ResourceObj {
 
                     break;
                 case BasicType.T_LONG:
-                    vals[i] = frame.getStack().pop().getVal();
+                    vals[i] = frame.getStack().pop().getData();
 
                     break;
                 case BasicType.T_DOUBLE:
-                    vals[i] = frame.getStack().pop().getVal();
+                    vals[i] = frame.getStack().popDouble();
+
+                    break;
+                case BasicType.T_FLOAT:
+                    vals[i] = frame.getStack().pop().getData();
 
                     break;
                 case BasicType.T_ARRAY:

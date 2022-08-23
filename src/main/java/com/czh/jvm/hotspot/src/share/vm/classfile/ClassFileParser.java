@@ -526,7 +526,6 @@ public class ClassFileParser {
             index += 1;
 
             //根据不同的常量类型采取不同的读取方式
-            //TODO 暂时还没有处理Integer，Long
             switch (tag) {
                 case ConstantPool.JVM_CONSTANT_Utf8: {
                     klass.getConstantPool().getTag()[i] = ConstantPool.JVM_CONSTANT_Utf8;
@@ -567,7 +566,24 @@ public class ClassFileParser {
                 case ConstantPool.JVM_CONSTANT_Long:
                     klass.getConstantPool().getTag()[i] = ConstantPool.JVM_CONSTANT_Long;
 
-                    throw new Error("程序未做处理");
+                    Stream.readU8Simple(content, index, u8Arr);
+                    index += 8;
+
+                    klass.getConstantPool().getDataMap().put(i, DataTranslate.bytesToLong(u8Arr));
+
+                    logger.info("\t第 " + i + " 个: 类型: Long，值: " + klass.getConstantPool().getDataMap().get(i));
+
+                    /**
+                     *  因为一个long在常量池中需要两个成员项目来存储
+                     *  所以需要处理
+                     */
+                    klass.getConstantPool().getTag()[++i] = ConstantPool.JVM_CONSTANT_Long;
+
+                    klass.getConstantPool().getDataMap().put(i, DataTranslate.bytesToLong(u8Arr));
+
+                    logger.info("\t第 " + i + " 个: 类型: Long，值: " + klass.getConstantPool().getDataMap().get(i));
+
+                    break;
                 case ConstantPool.JVM_CONSTANT_Double:
                     klass.getConstantPool().getTag()[i] = ConstantPool.JVM_CONSTANT_Double;
 

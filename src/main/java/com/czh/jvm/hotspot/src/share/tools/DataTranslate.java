@@ -123,29 +123,24 @@ public class DataTranslate {
         return Float.intBitsToFloat(l);
     }
 
+
+    /**
+     * 测试OK
+     * @param f
+     * @return
+     */
     public static byte[] floatToByte(float f) {
-        // 把float转换为byte[]
-        int fbit = Float.floatToIntBits(f);
+        byte[] ret = new byte[4];
 
-        byte[] b = new byte[4];
-        for (int i = 0; i < 4; i++) {
-            b[i] = (byte) (fbit >> (24 - i * 8));
-        }
+        //将float里面的二进制串解释为int整数
+        int i = Float.floatToIntBits(f);
 
-        // 翻转数组
-        int len = b.length;
-        // 建立一个与源数组元素类型相同的数组
-        byte[] dest = new byte[len];
-        // 为了防止修改源数组，将源数组拷贝一份副本
-        System.arraycopy(b, 0, dest, 0, len);
-        byte temp;
-        // 将顺位第i个与倒数第i个交换
-        for (int i = 0; i < len / 2; ++i) {
-            temp = dest[i];
-            dest[i] = dest[len - i - 1];
-            dest[len - i - 1] = temp;
-        }
-        return dest;
+        ret[0] = (byte) ((i & 0xff000000) >> 24);
+        ret[1] = (byte) ((i & 0x00ff0000) >> 16);
+        ret[2] = (byte) ((i & 0x0000ff00) >> 8);
+        ret[3] = (byte)  (i & 0x000000ff);
+
+        return ret;
     }
 
     public static long byteToLong(byte[] input, int offset, boolean littleEndian){
@@ -211,6 +206,18 @@ public class DataTranslate {
         }
 
         return byteRet;
+    }
+
+    public static long bytesToLong(byte[] arr) {
+        ByteBuffer buffer = ByteBuffer.wrap(arr, 0, 8);
+
+        return buffer.getLong();
+    }
+
+    public static byte[] longToBytes(long v) {
+        ByteBuffer buffer = ByteBuffer.allocate(8);
+        buffer.putLong(v);
+        return buffer.array();
     }
 
 }
