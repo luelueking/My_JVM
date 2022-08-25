@@ -28,6 +28,11 @@ public class StackValueCollection {
         getContainer().push(value);
     }
 
+    public void pushInt(int val, JavaVFrame frame) {
+        frame.getStack().push(new StackValue(BasicType.T_INT, val));
+    }
+
+
     public StackValue pop() {
         return getContainer().pop();
     }

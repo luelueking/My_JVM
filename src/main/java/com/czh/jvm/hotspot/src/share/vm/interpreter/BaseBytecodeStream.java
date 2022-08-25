@@ -32,6 +32,14 @@ public class BaseBytecodeStream {
         return Byte.toUnsignedInt(codes[index++]);
     }
 
+    public int getU1Code2() {
+        if (index < 0 || index >= length) {
+            throw new Error("字节码指令的索引超过了最大值");
+        }
+
+        return codes[index++];
+    }
+
     public int getU2Code() {
         if (index < 0 || index >= length) {
             throw new Error("字节码指令的索引超过了最大值");

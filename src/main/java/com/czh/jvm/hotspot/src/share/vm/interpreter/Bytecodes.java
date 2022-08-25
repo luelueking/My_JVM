@@ -118,6 +118,24 @@ public class Bytecodes {
     public static final int FADD = 98;      // 0x62
     public static final int DADD = 99;      // 0x63
 
+    public static final int ISUB = 100;     // 0x64
+    public static final int LSUB = 101;     // 0x65
+    public static final int FSUB = 102;     // 0x66
+    public static final int DSUB = 103;     // 0x67
+    public static final int IMUL = 104;     // 0x68
+    public static final int LMUL = 105;     // 0x69
+    public static final int FMUL = 106;     // 0x6a
+    public static final int DMUL = 107;     // 0x6b
+    public static final int IDIV = 108;     // 0x6c
+    public static final int LDIV = 109;     // 0x6d
+    public static final int FDIV = 110;     // 0x6e
+    public static final int DDIV = 111;     // 0x6f
+    public static final int IREM = 112;     // 0x70
+    public static final int LREM = 113;     // 0x71
+    public static final int FREM = 114;     // 0x72
+    public static final int DREM = 115;     // 0x73
+
+
     public static final int IINC = 132;     // 0x84
 
     //=====
