@@ -251,6 +251,75 @@ public class BytecodeInterpreter extends StackObj {
 
                     break;
                 }
+                case Bytecodes.IF_ICMPNE:{ // int数值的条件分之判断!=
+                    logger.info("执行指令: IF_ICMPNE");
+
+                    // 取出比较数
+                    StackValue value1 = frame.getStack().pop();
+                    StackValue value2 = frame.getStack().pop();
+
+                    // 取出操作数
+                    short operand = code.getUnsignedShort();
+
+                    // 基本验证
+                    if (value1.getType() != BasicType.T_INT || value2.getType() != BasicType.T_INT) {
+                        logger.error("不匹配的数据类型");
+
+                        throw new Error("不匹配的数据类型");
+                    }
+
+                    // 比较
+                    if (value1.getVal() != value2.getVal()) {
+                        /**
+                         * -1：减去IF_ICMPEQ指令占用的1B
+                         * -2：减去操作数operand占用的2B
+                         *
+                         * 因为跳转的位置是从该条指令的起始位置开始算的
+                         */
+                        code.inc(operand - 1 - 2);
+                    }
+
+                    break;
+                }
+                case Bytecodes.GOTO:{ // 无条件分支跳转
+                    logger.info("执行指令: GOTO");
+
+                    short operand = code.getUnsignedShort();
+
+                    code.inc(operand - 2 - 1);
+
+                    break;
+                }
+                case Bytecodes.IF_ICMPEQ:{ // int数值的条件分之判断 ==
+                    logger.info("执行指令: IF_ICMPEQ");
+
+                    // 取出比较数
+                    StackValue value1 = frame.getStack().pop();
+                    StackValue value2 = frame.getStack().pop();
+
+                    // 取出操作数
+                    short operand = code.getUnsignedShort();
+
+                    // 基本验证
+                    if (value1.getType() != BasicType.T_INT || value2.getType() != BasicType.T_INT) {
+                        logger.error("不匹配的数据类型");
+
+                        throw new Error("不匹配的数据类型");
+                    }
+
+                    // 比较,当相等时需要跳转
+                    if (value1.getVal() == value2.getVal()) {
+                        /**
+                         * -1：减去IF_ICMPEQ指令占用的1B
+                         * -2：减去操作数operand占用的2B
+                         *
+                         * 因为跳转的位置是从该条指令的起始位置开始算的
+                         */
+                        code.inc(operand - 1 - 2);
+                    }
+
+                    break;
+                }
                 case Bytecodes.I2L: {
                     logger.info("执行指令: I2L");
 

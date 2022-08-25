@@ -8,6 +8,8 @@ import com.czh.jvm.hotspot.src.share.vm.utilities.AccessFlags;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.lang.annotation.Annotation;
+
 public class ClassFileParser {
 
     private static Logger logger = LoggerFactory.getLogger(ClassFileParser.class);
@@ -38,7 +40,7 @@ public class ClassFileParser {
 
         klass.getConstantPool().initContainer();
 
-        // 解析常量池 N字节
+        // 常量池 N字节
         index = parseConstantPool(content, klass, index);
 
         // 类的访问权限 2B
@@ -106,7 +108,7 @@ public class ClassFileParser {
 
             String attrName = (String) klass.getConstantPool().getDataMap().get(DataTranslate.byteToUnsignedShort(u2Arr));
             if (attrName.equals("SourceFile")) {
-                index = parseSourceFile(content, index, klass);
+                index = parseSourceFile(content, index, klass, attrName);
             } else {
                 throw new Error("无法识别的类属性: " + attrName);
             }
@@ -114,6 +116,7 @@ public class ClassFileParser {
 
         return klass;
     }
+
 
     private static int parseInterface(byte[] content, InstanceKlass klass, int index) {
         byte[] u2Arr = new byte[2];
@@ -134,13 +137,13 @@ public class ClassFileParser {
         return index;
     }
 
-    private static int parseSourceFile(byte[] content, int index, InstanceKlass klass) {
+    private static int parseSourceFile(byte[] content, int index, InstanceKlass klass, String attrName) {
         byte[] u2Arr = new byte[2];
         byte[] u4Arr = new byte[4];
 
         AttributeInfo attributeInfo = new AttributeInfo();
 
-        klass.getAttributeInfos().add(attributeInfo);
+        klass.getAttributeInfos().put(attrName, attributeInfo);
 
         // name index
         Stream.readU2Simple(content, index, u2Arr);
@@ -201,6 +204,12 @@ public class ClassFileParser {
             index += 2;
 
             methodInfo.setDescriptorIndex(DataTranslate.byteToUnsignedShort(u2Arr));
+
+            // 解析出参数个数、参数类型、返回值类型
+            DescriptorStream2 stream = new DescriptorStream2((String) methodInfo.getBelongKlass().getConstantPool().getDataMap().get(methodInfo.getDescriptorIndex()));
+            stream.parseMethod();
+
+            methodInfo.setDescriptor(stream);
 
             // attribute count
             Stream.readU2Simple(content, index, u2Arr);
@@ -291,6 +300,8 @@ public class ClassFileParser {
                         index = parseLineNumberTable(content, index, attrName, attributeInfo);
                     } else if (attrName.equals("LocalVariableTable")) {
                         index = parseLocalVariableTable(content, index, attrName, attributeInfo);
+                    } else if (attrName.equals("StackMapTable")) {
+                        index = parseStackMapTable(content, index, attrName, attributeInfo);
                     }
                 }
             }
@@ -304,6 +315,40 @@ public class ClassFileParser {
                 BootClassLoader.setMainKlass(klass);
             }
         }
+
+        return index;
+    }
+
+    private static int parseStackMapTable(byte[] content,
+                                          int index,
+                                          String attrName,
+                                          CodeAttributeInfo attributeInfo) {
+        byte[] u2Arr = new byte[2];
+        byte[] u4Arr = new byte[4];
+
+        StackMapTable stackMapTable = new StackMapTable();
+
+        attributeInfo.getAttributes().put(attrName, stackMapTable);
+
+        // attr name index
+        Stream.readU2Simple(content, index, u2Arr);
+        index += 2;
+
+        stackMapTable.setAttrNameIndex(DataTranslate.byteToUnsignedShort(u2Arr));
+
+        // attr len
+        Stream.readU4Simple(content, index, u4Arr);
+        index += 4;
+
+        stackMapTable.setAttrLength(DataTranslate.byteArrayToInt(u4Arr));
+
+        // 跳过后面的后面
+        index += stackMapTable.getAttrLength();
+
+        logger.info("\t\t\t stackMapTable: "
+                + ", name index: " + stackMapTable.getAttrNameIndex()
+                + ", attr len: " + stackMapTable.getAttrLength()
+        );
 
         return index;
     }
@@ -512,7 +557,6 @@ public class ClassFileParser {
         return index;
     }
 
-
     private static int parseConstantPool(byte[] content, InstanceKlass klass, int index) {
         logger.info("解析常量池:");
 
@@ -521,11 +565,9 @@ public class ClassFileParser {
         byte[] u8Arr = new byte[8];
 
         for (int i = 1; i < klass.getConstantPool().getLength(); i++) {
-            //先读一个tag
             int tag = Stream.readU1Simple(content, index);
             index += 1;
 
-            //根据不同的常量类型采取不同的读取方式
             switch (tag) {
                 case ConstantPool.JVM_CONSTANT_Utf8: {
                     klass.getConstantPool().getTag()[i] = ConstantPool.JVM_CONSTANT_Utf8;
@@ -548,11 +590,12 @@ public class ClassFileParser {
 
                     break;
                 }
-                case ConstantPool.JVM_CONSTANT_Integer:
+                case ConstantPool.JVM_CONSTANT_Integer: {
                     klass.getConstantPool().getTag()[i] = ConstantPool.JVM_CONSTANT_Integer;
 
                     throw new Error("程序未做处理");
-                case ConstantPool.JVM_CONSTANT_Float:
+                }
+                case ConstantPool.JVM_CONSTANT_Float: {
                     klass.getConstantPool().getTag()[i] = ConstantPool.JVM_CONSTANT_Float;
 
                     Stream.readU4Simple(content, index, u4Arr);
@@ -560,10 +603,11 @@ public class ClassFileParser {
 
                     klass.getConstantPool().getDataMap().put(i, DataTranslate.byteToFloat(u4Arr));
 
-                    logger.info("\t第 " + i+ " 个: 类型: Float，值: " + klass.getConstantPool().getDataMap().get(i));
+                    logger.info("\t第 " + i + " 个: 类型: Float，值: " + klass.getConstantPool().getDataMap().get(i));
 
                     break;
-                case ConstantPool.JVM_CONSTANT_Long:
+                }
+                case ConstantPool.JVM_CONSTANT_Long: {
                     klass.getConstantPool().getTag()[i] = ConstantPool.JVM_CONSTANT_Long;
 
                     Stream.readU8Simple(content, index, u8Arr);
@@ -584,7 +628,8 @@ public class ClassFileParser {
                     logger.info("\t第 " + i + " 个: 类型: Long，值: " + klass.getConstantPool().getDataMap().get(i));
 
                     break;
-                case ConstantPool.JVM_CONSTANT_Double:
+                }
+                case ConstantPool.JVM_CONSTANT_Double: {
                     klass.getConstantPool().getTag()[i] = ConstantPool.JVM_CONSTANT_Double;
 
                     Stream.readU8Simple(content, index, u8Arr);
@@ -592,7 +637,7 @@ public class ClassFileParser {
 
                     klass.getConstantPool().getDataMap().put(i, DataTranslate.bytesToDouble(u8Arr, false));
 
-                    logger.info("\t第 " + i+ " 个: 类型: Double，值: " + klass.getConstantPool().getDataMap().get(i));
+                    logger.info("\t第 " + i + " 个: 类型: Double，值: " + klass.getConstantPool().getDataMap().get(i));
 
                     /**
                      *  因为一个double在常量池中需要两个成员项目来存储
@@ -602,9 +647,10 @@ public class ClassFileParser {
 
                     klass.getConstantPool().getDataMap().put(i, DataTranslate.bytesToDouble(u8Arr, false));
 
-                    logger.info("\t第 " + i+ " 个: 类型: Double，值: " + klass.getConstantPool().getDataMap().get(i));
+                    logger.info("\t第 " + i + " 个: 类型: Double，值: " + klass.getConstantPool().getDataMap().get(i));
 
                     break;
+                }
                 case ConstantPool.JVM_CONSTANT_Class: {
                     klass.getConstantPool().getTag()[i] = ConstantPool.JVM_CONSTANT_Class;
 
@@ -617,7 +663,7 @@ public class ClassFileParser {
 
                     break;
                 }
-                case ConstantPool.JVM_CONSTANT_String:
+                case ConstantPool.JVM_CONSTANT_String: {
                     klass.getConstantPool().getTag()[i] = ConstantPool.JVM_CONSTANT_String;
 
                     // Utf8_info
@@ -626,9 +672,10 @@ public class ClassFileParser {
 
                     klass.getConstantPool().getDataMap().put(i, DataTranslate.byteToUnsignedShort(u2Arr));
 
-                    logger.info("\t第 " + i+ " 个: 类型: String，值无法获取，因为字符串的内容还未解析到");
+                    logger.info("\t第 " + i + " 个: 类型: String，值无法获取，因为字符串的内容还未解析到");
 
                     break;
+                }
                 case ConstantPool.JVM_CONSTANT_Fieldref: {
                     klass.getConstantPool().getTag()[i] = ConstantPool.JVM_CONSTANT_Fieldref;
 
@@ -672,7 +719,7 @@ public class ClassFileParser {
 
                     break;
                 }
-                case ConstantPool.JVM_CONSTANT_InterfaceMethodref:
+                case ConstantPool.JVM_CONSTANT_InterfaceMethodref: {
                     klass.getConstantPool().getTag()[i] = ConstantPool.JVM_CONSTANT_InterfaceMethodref;
 
                     // Class_info
@@ -690,9 +737,10 @@ public class ClassFileParser {
                     // 将classIndex与nameAndTypeIndex拼成一个，前十六位是classIndex，后十六位是nameAndTypeIndex
                     klass.getConstantPool().getDataMap().put(i, classIndex << 16 | nameAndTypeIndex);
 
-                    logger.info("\t第 " + i+ " 个: 类型: InterfaceMethodref，值: 0x" + Integer.toHexString((int) klass.getConstantPool().getDataMap().get(i)));
+                    logger.info("\t第 " + i + " 个: 类型: InterfaceMethodref，值: 0x" + Integer.toHexString((int) klass.getConstantPool().getDataMap().get(i)));
 
                     break;
+                }
                 case ConstantPool.JVM_CONSTANT_NameAndType: {
                     klass.getConstantPool().getTag()[i] = ConstantPool.JVM_CONSTANT_NameAndType;
 
@@ -714,6 +762,59 @@ public class ClassFileParser {
 
                     break;
                 }
+                case ConstantPool.JVM_CONSTANT_MethodHandle: {
+                    klass.getConstantPool().getTag()[i] = ConstantPool.JVM_CONSTANT_InvokeDynamic;
+
+                    // reference kind
+                    byte referenceKind = Stream.readU1Simple(content, index);
+                    index += 1;
+
+                    // reference index
+                    Stream.readU2Simple(content, index, u2Arr);
+                    index += 2;
+
+                    int referenceIndex = DataTranslate.byteToUnsignedShort(u2Arr);
+
+                    klass.getConstantPool().getDataMap().put(i, referenceKind << 16 | referenceIndex);
+
+                    logger.info("\t第 " + i+ " 个: 类型: MethodHandle，值: 0x" + Integer.toHexString((int) klass.getConstantPool().getDataMap().get(i)));
+
+                    break;
+                }
+                case ConstantPool.JVM_CONSTANT_MethodType: {
+                    klass.getConstantPool().getTag()[i] = ConstantPool.JVM_CONSTANT_String;
+
+                    // descriptor index
+                    Stream.readU2Simple(content, index, u2Arr);
+                    index += 2;
+
+                    klass.getConstantPool().getDataMap().put(i, DataTranslate.byteToUnsignedShort(u2Arr));
+
+                    logger.info("\t第 " + i+ " 个: 类型: MethodType，值: " + klass.getConstantPool().getDataMap().get(i));
+
+                    break;
+                }
+                case ConstantPool.JVM_CONSTANT_InvokeDynamic: {
+                    klass.getConstantPool().getTag()[i] = ConstantPool.JVM_CONSTANT_InvokeDynamic;
+
+                    // bootstrap method attr
+                    Stream.readU2Simple(content, index, u2Arr);
+                    index += 2;
+
+                    int bootstrapMethodAttrIndex = DataTranslate.byteToUnsignedShort(u2Arr);
+
+                    // 方法描述符
+                    Stream.readU2Simple(content, index, u2Arr);
+                    index += 2;
+
+                    int methodDescriptorIndex = DataTranslate.byteToUnsignedShort(u2Arr);
+
+                    klass.getConstantPool().getDataMap().put(i, bootstrapMethodAttrIndex << 16 | methodDescriptorIndex);
+
+                    logger.info("\t第 " + i+ " 个: 类型: InvokeDynamic，值: 0x" + Integer.toHexString((int) klass.getConstantPool().getDataMap().get(i)));
+
+                    break;
+                }
                 default:
                     throw new Error("无法识别的常量池项");
             }
@@ -721,4 +822,5 @@ public class ClassFileParser {
 
         return index;
     }
+
 }

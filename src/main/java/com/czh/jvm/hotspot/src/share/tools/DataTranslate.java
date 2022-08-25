@@ -109,6 +109,11 @@ public class DataTranslate {
         return value;
     }
 
+    /**
+     * 测试OK
+     * @param b
+     * @return
+     */
     public static float byteToFloat(byte[] b) {
         int l;
 
@@ -123,6 +128,15 @@ public class DataTranslate {
         return Float.intBitsToFloat(l);
     }
 
+    public static float bytesToFloat(byte[] arr, boolean littleEndian) {
+        ByteBuffer buffer = ByteBuffer.wrap(arr,0,4);
+
+        if (littleEndian) {
+            buffer.order(ByteOrder.LITTLE_ENDIAN);
+        }
+
+        return buffer.getFloat();
+    }
 
     /**
      * 测试OK
@@ -208,16 +222,18 @@ public class DataTranslate {
         return byteRet;
     }
 
+    public static byte[] longToBytes(long v) {
+        ByteBuffer buffer = ByteBuffer.allocate(8);
+        buffer.putLong(v);
+
+        return buffer.array();
+    }
+
     public static long bytesToLong(byte[] arr) {
         ByteBuffer buffer = ByteBuffer.wrap(arr, 0, 8);
 
         return buffer.getLong();
     }
 
-    public static byte[] longToBytes(long v) {
-        ByteBuffer buffer = ByteBuffer.allocate(8);
-        buffer.putLong(v);
-        return buffer.array();
-    }
 
 }

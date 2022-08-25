@@ -3,35 +3,34 @@ package com.czh.jvm.hotspot.src.share.vm.oops;
 import lombok.Data;
 
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 @Data
-public class InstanceKlass extends Klass{
-    //魔数
+public class InstanceKlass extends Klass {
+
     private byte[] magic = new byte[4];
-    //次版本号
     private byte[] minorVersion = new byte[2];
-    //主版本号
     private byte[] majorVersion = new byte[2];
 
-    //常量池
     private ConstantPool constantPool;
 
-    private int accessFlag;//类访问控制权限
-    private int thisClass;//类名
-    private int superClass;//父类名
+    private int accessFlag;
+    private int thisClass;
+    private int superClass;
 
-    private int interfacesLength;//接口数量
+    private int interfacesLength;
     private List<InterfaceInfo> interfaceInfos = new ArrayList<>();
 
-    private int fieldsLength;//成员属性数量
+    private int fieldsLength;
     private List<FieldInfo> fields = new ArrayList<>();
 
-    private int methodLength;//成员方法数量
+    private int methodLength;
     private MethodInfo[] methods;
 
-    private int attributeLength;//类属性数量
-    private List<AttributeInfo> attributeInfos = new ArrayList<>();
+    private int attributeLength;
+    private Map<String, AttributeInfo> attributeInfos = new HashMap<>();
 
     public InstanceKlass() {
         constantPool = new ConstantPool();
@@ -48,3 +47,4 @@ public class InstanceKlass extends Klass{
         return "InstanceKlass{ }";
     }
 }
+
