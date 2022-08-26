@@ -54,6 +54,20 @@ public class BaseBytecodeStream {
         return DataTranslate.byteArrayToInt(u2Arr);
     }
 
+    public int getU2CodeNew(){
+        if (index < 0 || index >= length) {
+            throw new Error("字节码指令的索引超过了最大值");
+        }
+
+        byte[] u2Arr = new byte[2];
+
+        Stream.readU2Simple(codes, index, u2Arr);
+
+        index += 2;
+
+        return Byte.toUnsignedInt((byte) ((u2Arr[0]<<8)|u2Arr[1]));
+    }
+
     public short getUnsignedShort() {
         if (index < 0 || index >= length) {
             throw new Error("字节码指令的索引超过了最大值");

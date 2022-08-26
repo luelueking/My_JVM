@@ -3,10 +3,7 @@ package com.czh.jvm.hotspot.src.share.vm.interpreter;
 import com.czh.jvm.hotspot.src.share.vm.classfile.BootClassLoader;
 import com.czh.jvm.hotspot.src.share.vm.classfile.DescriptorStream2;
 import com.czh.jvm.hotspot.src.share.vm.memory.StackObj;
-import com.czh.jvm.hotspot.src.share.vm.oops.ArrayOop;
-import com.czh.jvm.hotspot.src.share.vm.oops.ConstantPool;
-import com.czh.jvm.hotspot.src.share.vm.oops.InstanceKlass;
-import com.czh.jvm.hotspot.src.share.vm.oops.MethodInfo;
+import com.czh.jvm.hotspot.src.share.vm.oops.*;
 import com.czh.jvm.hotspot.src.share.vm.prims.JavaNativeInterface;
 import com.czh.jvm.hotspot.src.share.vm.runtime.JavaThread;
 import com.czh.jvm.hotspot.src.share.vm.runtime.JavaVFrame;
@@ -15,6 +12,8 @@ import com.czh.jvm.hotspot.src.share.vm.utilities.BasicType;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.lang.ref.Reference;
+import java.lang.reflect.Constructor;
 import java.lang.reflect.Field;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
@@ -201,7 +200,93 @@ public class BytecodeInterpreter extends StackObj {
                     }
                     break;
                 }
-                case Bytecodes.INVOKEVIRTUAL: { // 调用实例方法
+                case Bytecodes.INVOKESPECIAL: { // 调用实例方法，专门调用父类方法，私有方法和实例初始化方法
+                    logger.info("执行指令: INVOKESPECIAL( java体系的借助反射实现，自己定义的类自己实现 )");
+
+                    // 取出操作数
+                    short operand = code.getUnsignedShort();
+
+                    // 获取类名、方法名、方法签名
+                    String className = method.getBelongKlass().getConstantPool().getClassNameByMethodInfo(operand);
+                    String methodName = method.getBelongKlass().getConstantPool().getMethodNameByMethodInfo(operand);
+                    String descriptorName = method.getBelongKlass().getConstantPool().getDescriptorNameByMethodInfo(operand);
+
+                    logger.info("执行方法: " + className + ":" + methodName + "#" + descriptorName);
+
+                    if (className.startsWith("java")) {
+                        DescriptorStream2 descriptorStream = new DescriptorStream2(descriptorName);
+                        descriptorStream.parseMethod();
+
+                        Object[] params = descriptorStream.getParamsVal(frame);
+                        Class[] paramsClass = descriptorStream.getParamsType();
+
+                        /**
+                         * 1、为什么执行这步?
+                         *      因为非静态方法调用前都会压入对象指针，构建环境时给this赋值
+                         *      而java体系，我的设计中走的是反射机制。所以需要手动完成出栈，保持堆栈平衡
+                         * 2、为什么要放在去参数后面？因为参数在对象引用上面
+                         * | 参数1 |
+                         * --------
+                         * | 参数2 |
+                         * --------
+                         * | 对象引用 |
+                         * -----------
+                         */
+                        StackValue stackValue = frame.getStack().pop();
+                        Object object = stackValue.getObject();
+
+                        // 判断调用的是构造方法还是普通方法
+                        if (methodName.equals("<init>")) {
+                            try {
+                                if (null == object || object.equals("")) {
+                                    logger.info("\t NEW字节码指令未创建对象，在这里创建");
+
+                                    Class<?> clazz = Class.forName(className.replace('/', '.'));
+                                    Constructor<?> constructor = clazz.getConstructor(paramsClass);
+
+                                    object = constructor.newInstance(params);
+                                }
+
+                                if (!className.equals("java/lang/Object")) {
+                                    // 注意：这里应该是给栈帧顶部的StackValue赋值，而不是创建新的压栈
+                                    frame.getStack().peek().setObject(object);
+                                }
+                            } catch (ClassNotFoundException e) {
+                                e.printStackTrace();
+                            } catch (InstantiationException e) {
+                                e.printStackTrace();
+                            } catch (InvocationTargetException e) {
+                                e.printStackTrace();
+                            } catch (NoSuchMethodException e) {
+                                e.printStackTrace();
+                            } catch (IllegalAccessException e) {
+                                e.printStackTrace();
+                            }
+                        } else {
+                            // java体系，非构造方法
+                            throw new Error("java体系，非构造方法，未做处理");
+                        }
+                    } else {
+                        InstanceKlass klass = BootClassLoader.findLoadedKlass(className.replace('/', '.'));
+                        if (null == klass) {
+                            logger.info("\t 开始加载未加载的类:" + className);
+
+                            klass = BootClassLoader.loadKlass(className.replace('/', '.'));
+                        }
+
+                        MethodInfo methodID = JavaNativeInterface.getMethodID(klass, methodName, descriptorName);
+                        if (null == methodID) {
+                            throw new Error("不存在的方法: " + methodName + "#" + descriptorName);
+                        }
+
+                        methodID.getAttributes()[0].getCode().reset();
+
+                        JavaNativeInterface.callMethod(methodID);
+                    }
+
+                    break;
+                }
+                case Bytecodes.INVOKEVIRTUAL: { // 调用实例方法，依据实例的类型进行分派
                     logger.info("执行指令: INVOKEVIRTUAL");
 
                     // 取出操作数
@@ -253,6 +338,97 @@ public class BytecodeInterpreter extends StackObj {
                     break;
                 }
 
+                case Bytecodes.AALOAD: { // 从数组中加载一个reference类型数据到操作数栈
+                    logger.info("执行指令: AALOAD");
+
+                    int index = frame.getStack().pop().getVal();
+                    ArrayOop oop = frame.getStack().popArray(frame);
+
+                    if (index > oop.getSize() - 1) {
+                        throw new Error("数组访问越界");
+                    }
+
+                    Object v =  oop.getData().get(index);
+
+                    frame.getStack().pushObject(v, frame);
+
+                    break;
+                }
+                case Bytecodes.AASTORE: { // 从操作数栈中读取一个reference类型数据到数组中
+                    logger.info("执行指令: AASTORE");
+
+                    StackValue value = frame.getStack().pop();
+                    int index = frame.getStack().pop().getVal();
+                    ArrayOop oop = (ArrayOop) frame.getStack().pop().getObject();
+
+                    if (index > oop.getSize() - 1) {
+                        throw new Error("数组访问越界");
+                    }
+
+                    try {
+                        oop.getData().get(index);
+
+                        oop.getData().set(index, value.getObject());
+                    } catch (Exception e) {
+                        oop.getData().add(value.getObject());
+                    }
+
+                    break;
+                }
+                case Bytecodes.ANEWARRAY: { // 创建一个组件类型为reference类型的数组
+                    logger.info("执行指令: ANEWARRAY");
+
+                    int arrSize = frame.getStack().pop().getVal();
+
+                    int arrTypeIndex = code.getUnsignedShort();
+                    String name = method.getBelongKlass().getConstantPool().getClassName(arrTypeIndex);
+
+                    ArrayOop array = new ArrayOop(BasicType.T_OBJECT, name, arrSize);
+
+                    frame.getStack().pushArray(array, frame);
+
+                    break;
+                }
+                case Bytecodes.IALOAD: { // 从数组中加载一个int类型数据到操作数栈中
+                    logger.info("执行指令: IALOAD");
+
+                    int index = frame.getStack().pop().getVal();
+                    ArrayOop oop = frame.getStack().popArray(frame);
+
+                    if (index > oop.getSize() - 1) {
+                        throw new Error("数组访问越界");
+                    }
+
+                    int v = (int) oop.getData().get(index);
+
+                    frame.getStack().pushInt(v, frame);
+
+                    break;
+                }
+                case Bytecodes.IASTORE:{ // 从操作数栈读取一个int类型数据并存入数组
+                    logger.info("执行指令: IASTORE");
+
+                    int val = frame.getStack().pop().getVal();
+                    int index = frame.getStack().pop().getVal();
+                    ArrayOop oop = (ArrayOop) frame.getStack().pop().getObject();
+
+                    if (index > oop.getSize() - 1) {
+                        throw new Error("数组访问越界");
+                    }
+
+                    try {
+                        oop.getData().get(index);
+
+                        oop.getData().set(index, val);
+                    } catch (Exception e) {
+                        oop.getData().add(val);
+                    }
+
+                    // 因为向数组中添加元素、修改元素都是这个指令，所以这样写会出问题
+//                    oop.getData().add(index, val);
+
+                    break;
+                }
                 case Bytecodes.BALOAD:{ // 从数组中读取一个byte或者boolean数据
                     logger.info("执行指令: BALOAD");
 
@@ -297,6 +473,43 @@ public class BytecodeInterpreter extends StackObj {
                     ArrayOop o = frame.getStack().popArray(frame);
 
                     frame.getStack().pushInt(o.getSize(), frame);
+
+                    break;
+                }
+                case Bytecodes.NEW: { // 创建一个对象
+                    logger.info("执行指令: NEW");
+
+                    // 取出操作数
+                    short operand = code.getUnsignedShort();
+
+                    String className = method.getBelongKlass().getConstantPool().getClassName(operand);
+
+                    try {
+                        Class<?> clazz = Class.forName(className.replace('/', '.'));
+                        Constructor<?> constructor = clazz.getConstructor();
+
+                        Object o = constructor.newInstance();
+
+                        if (o instanceof Throwable) {
+                            frame.getStack().push(new StackValue(BasicType.T_Throwable, o));
+                        } else {
+                            frame.getStack().push(new StackValue(BasicType.T_OBJECT, o));
+                        }
+                    } catch (ClassNotFoundException e) {
+                        e.printStackTrace();
+                    } catch (IllegalAccessException e) {
+                        e.printStackTrace();
+                    } catch (InstantiationException e) {
+                        e.printStackTrace();
+                    } catch (NoSuchMethodException e) {
+                        /**
+                         * 如果没有无参构造函数，就传null，保证栈帧平衡
+                         * 后面调用到构造方法的时候进行判断处理
+                         */
+                        frame.getStack().push(new StackValue(BasicType.T_OBJECT, null));
+                    } catch (InvocationTargetException e) {
+                        e.printStackTrace();
+                    }
 
                     break;
                 }

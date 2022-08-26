@@ -32,6 +32,9 @@ public class StackValueCollection {
     public void pushInt(int val, JavaVFrame frame) {
         frame.getStack().push(new StackValue(BasicType.T_INT, val));
     }
+    public void pushObject(Object val, JavaVFrame frame) {
+        frame.getStack().push(new StackValue(BasicType.T_OBJECT, val));
+    }
 
 
     public StackValue pop() {
