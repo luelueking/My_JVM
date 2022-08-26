@@ -3,6 +3,7 @@ package com.czh.jvm.hotspot.src.share.vm.interpreter;
 import com.czh.jvm.hotspot.src.share.vm.classfile.BootClassLoader;
 import com.czh.jvm.hotspot.src.share.vm.classfile.DescriptorStream2;
 import com.czh.jvm.hotspot.src.share.vm.memory.StackObj;
+import com.czh.jvm.hotspot.src.share.vm.oops.ArrayOop;
 import com.czh.jvm.hotspot.src.share.vm.oops.ConstantPool;
 import com.czh.jvm.hotspot.src.share.vm.oops.InstanceKlass;
 import com.czh.jvm.hotspot.src.share.vm.oops.MethodInfo;
@@ -247,6 +248,296 @@ public class BytecodeInterpreter extends StackObj {
                         }
                     } else {
 
+                    }
+
+                    break;
+                }
+
+                case Bytecodes.BALOAD:{ // 从数组中读取一个byte或者boolean数据
+                    logger.info("执行指令: BALOAD");
+
+                    int index = frame.getStack().pop().getVal();
+                    ArrayOop oop = frame.getStack().popArray(frame);
+
+                    if (index > oop.getSize() - 1) {
+                        throw new Error("数组访问越界");
+                    }
+
+                    int v = (int) oop.getData().get(index);
+
+                    frame.getStack().pushInt(v, frame);
+
+                    break;
+                }
+                case Bytecodes.BASTORE:{ // 从操作数栈读取一个byte或boolean类型数据并存入数组中
+                    logger.info("执行指令: BASTORE");
+
+                    int val = frame.getStack().pop().getVal();
+                    int index = frame.getStack().pop().getVal();
+                    ArrayOop oop = (ArrayOop) frame.getStack().pop().getObject();
+
+                    if (index > oop.getSize() - 1) {
+                        throw new Error("数组访问越界");
+                    }
+
+                    try {
+                        oop.getData().get(index);
+
+                        oop.getData().set(index, val);
+                    } catch (Exception e) {
+                        oop.getData().add(val);
+                    }
+
+                    break;
+
+                }
+                case Bytecodes.ARRAYLENGTH:{ // 取数组长度
+                    logger.info("执行指令：ARRARYLENGTH");
+
+                    ArrayOop o = frame.getStack().popArray(frame);
+
+                    frame.getStack().pushInt(o.getSize(), frame);
+
+                    break;
+                }
+                case Bytecodes.NEWARRAY:{ // 创建一个新数组
+                    logger.info("执行指令: NEWARRAY");
+
+                    int arrSize = frame.getStack().pop().getVal();
+
+                    int arrType = code.getU1Code();
+
+                    ArrayOop array = new ArrayOop(arrType, arrSize);
+
+                    frame.getStack().pushArray(array, frame);
+
+                    break;
+                }
+                case Bytecodes.IF_ICMPGE: { // int数值的条件分支判断
+                    logger.info("执行指令: IF_ICMPGE");
+
+                    // 取出比较数
+                    StackValue value1 = frame.getStack().pop();
+                    StackValue value2 = frame.getStack().pop();
+
+                    // 取出操作数
+                    short operand = code.getUnsignedShort();
+
+                    // 基本验证
+                    if (value1.getType() != BasicType.T_INT || value2.getType() != BasicType.T_INT) {
+                        logger.error("不匹配的数据类型");
+
+                        throw new Error("不匹配的数据类型");
+                    }
+
+                    // 比较
+                    if (value2.getVal() >= value1.getVal()) {
+                        /**
+                         * -1：减去IF_ICMPEQ指令占用的1B
+                         * -2：减去操作数operand占用的2B
+                         *
+                         * 因为跳转的位置是从该条指令的起始位置开始算的
+                         */
+                        code.inc(operand - 1 - 2);
+                    }
+
+                    break;
+                }
+                case Bytecodes.IF_ICMPGT: {
+                    logger.info("执行指令: IF_ICMPGT");
+
+                    // 取出比较数
+                    StackValue value1 = frame.getStack().pop();
+                    StackValue value2 = frame.getStack().pop();
+
+                    // 取出操作数
+                    short operand = code.getUnsignedShort();
+
+                    // 基本验证
+                    if (value1.getType() != BasicType.T_INT || value2.getType() != BasicType.T_INT) {
+                        logger.error("不匹配的数据类型");
+
+                        throw new Error("不匹配的数据类型");
+                    }
+
+                    // 比较
+                    if (value2.getVal() > value1.getVal()) {
+                        /**
+                         * -1：减去IF_ICMPEQ指令占用的1B
+                         * -2：减去操作数operand占用的2B
+                         *
+                         * 因为跳转的位置是从该条指令的起始位置开始算的
+                         */
+                        code.inc(operand - 1 - 2);
+                    }
+
+                    break;
+                }
+                case Bytecodes.IF_ICMPLE: {
+                    logger.info("执行指令: IF_ICMPLE");
+
+                    // 取出比较数
+                    StackValue value1 = frame.getStack().pop();
+                    StackValue value2 = frame.getStack().pop();
+
+                    // 取出操作数
+                    short operand = code.getUnsignedShort();
+
+                    // 基本验证
+                    if (value1.getType() != BasicType.T_INT || value2.getType() != BasicType.T_INT) {
+                        logger.error("不匹配的数据类型");
+
+                        throw new Error("不匹配的数据类型");
+                    }
+
+                    // 比较
+                    if (value2.getVal() <= value1.getVal()) {
+                        /**
+                         * -1：减去IF_ICMPEQ指令占用的1B
+                         * -2：减去操作数operand占用的2B
+                         *
+                         * 因为跳转的位置是从该条指令的起始位置开始算的
+                         */
+                        code.inc(operand - 1 - 2);
+                    }
+
+                    break;
+                }
+                case Bytecodes.IFNONNULL:{ // 引用不为空的条件分支判断
+                    logger.info("执行指令: IFNONNULL");
+
+                    // 取出操作数
+                    short operand = code.getUnsignedShort();
+
+                    Object o = frame.getStack().pop().getData();
+
+                    // 比较
+                    if (null != o) {
+                        code.inc(operand - 1 - 2);
+                    }
+                    break;
+                }
+                case Bytecodes.ALOAD_0:{ // 从局部变量表加载一个reference类型值到操作数栈中
+                    logger.info("执行指令: ALOAD_0");
+                    // 从局部变量表取出数据
+                    StackValue value = frame.getLocals().get(0);
+                    // 压入栈
+                    frame.getStack().push(value);
+                    break;
+                }
+                case Bytecodes.ALOAD_1:{ // 从局部变量表加载一个reference类型值到操作数栈中
+                    logger.info("执行指令: ALOAD_1");
+                    // 从局部变量表取出数据
+                    StackValue value = frame.getLocals().get(1);
+                    // 压入栈
+                    frame.getStack().push(value);
+                    break;
+                }
+                case Bytecodes.ASTORE_0:{ // 将一个reference类型的数据保存到本地变量表中
+                    logger.info("执行指令: ASTORE_0");
+                    // 取出数据
+                    StackValue value = frame.getStack().pop();
+                    // 存入局部变量表
+                    frame.getLocals().add(0, value);
+                    break;
+                }
+                case Bytecodes.ASTORE_1:{ // 将一个reference类型的数据保存到本地变量表中
+                    logger.info("执行指令: ASTORE_1");
+                    // 取出数据
+                    StackValue value = frame.getStack().pop();
+                    // 存入局部变量表
+                    frame.getLocals().add(1, value);
+                    break;
+                }
+                case Bytecodes.ACONST_NULL:{ // 将一个null值入栈到操作数栈中
+                    logger.info("执行指令: ACONST_NULL");
+                    frame.getStack().pushNull(frame);
+                    break;
+                }
+                case Bytecodes.IFEQ: {
+                    logger.info("执行指令: IFEQ");
+
+                    int i = (int) frame.getStack().pop().getData();
+                    int operand = code.getUnsignedShort();
+
+                    if (0 == i) {
+                        code.inc(operand - 1 - 2);
+                    }
+
+                    break;
+                }
+                case Bytecodes.IFNE:{ // 整数与0比较的条件分支判断
+                    logger.info("执行指令: IFNE");
+
+                    int i = (int) frame.getStack().pop().getData();
+                    int operand = code.getUnsignedShort();
+
+                    if (0 != i) {
+                        code.inc(operand - 1 - 2);
+                    }
+
+                    break;
+                }
+                case Bytecodes.IFLT: {
+                    logger.info("执行指令: IFLT");
+
+                    int i = (int) frame.getStack().pop().getData();
+                    int operand = code.getUnsignedShort();
+
+                    if (i < 0) {
+                        code.inc(operand - 1 - 2);
+                    }
+
+                    break;
+                }
+                case Bytecodes.IFGE: {
+                    logger.info("执行指令: IFGE");
+
+                    int i = (int) frame.getStack().pop().getData();
+                    int operand = code.getUnsignedShort();
+
+                    if (i >= 0) {
+                        code.inc(operand - 1 - 2);
+                    }
+
+                    break;
+                }
+                case Bytecodes.IFGT: {
+                    logger.info("执行指令: IFGT");
+
+                    int i = (int) frame.getStack().pop().getData();
+                    int operand = code.getUnsignedShort();
+
+                    if (i > 0) {
+                        code.inc(operand - 1 - 2);
+                    }
+
+                    break;
+                }
+                case Bytecodes.IFLE: {
+                    logger.info("执行指令: IFLE");
+
+                    int i = (int) frame.getStack().pop().getData();
+                    int operand = code.getUnsignedShort();
+
+                    if (i <= 0) {
+                        code.inc(operand - 1 - 2);
+                    }
+
+                    break;
+                }
+                case Bytecodes.LCMP:{ // 比较二个long类型数据的大小
+                    logger.info("执行指令: LCMP");
+
+                    long l1 = (long) frame.getStack().pop().getData();
+                    long l2 = (long) frame.getStack().pop().getData();
+
+                    if (l1 > l2) {
+                        frame.getStack().pushInt(1, frame);
+                    } else if (l1 == l2) {
+                        frame.getStack().pushInt(0, frame);
+                    } else if (l1 < l2) {
+                        frame.getStack().pushInt(-1, frame);
                     }
 
                     break;

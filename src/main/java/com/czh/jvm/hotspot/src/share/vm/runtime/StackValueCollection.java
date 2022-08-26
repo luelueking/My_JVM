@@ -1,6 +1,7 @@
 package com.czh.jvm.hotspot.src.share.vm.runtime;
 
 import com.czh.jvm.hotspot.src.share.tools.DataTranslate;
+import com.czh.jvm.hotspot.src.share.vm.oops.ArrayOop;
 import com.czh.jvm.hotspot.src.share.vm.utilities.BasicType;
 import lombok.Data;
 import org.slf4j.Logger;
@@ -108,4 +109,21 @@ public class StackValueCollection {
         return getLocals()[index];
     }
 
+    public void pushNull(JavaVFrame frame) {
+        frame.getStack().push(new StackValue(BasicType.T_OBJECT, null));
+    }
+
+    public void pushArray(ArrayOop array, JavaVFrame frame) {
+        frame.getStack().push(new StackValue(BasicType.T_ARRAY, array));
+    }
+
+    public ArrayOop popArray(JavaVFrame frame) {
+        StackValue value = frame.getStack().pop();
+
+        if (BasicType.T_ARRAY != value.getType()) {
+            throw new Error("类型检查不通过");
+        }
+
+        return (ArrayOop) value.getObject();
+    }
 }
