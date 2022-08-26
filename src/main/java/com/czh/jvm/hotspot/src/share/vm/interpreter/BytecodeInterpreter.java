@@ -137,6 +137,22 @@ public class BytecodeInterpreter extends StackObj {
 
                     break;
                 }
+                case Bytecodes.INVOKEDYNAMIC:{ // 调用动态方法
+                    logger.info("执行指令: INVOKEDYNAMIC");
+
+                    int code1 = code.getU1Code();
+                    int code2 = code.getU1Code();
+                    int code3 = code.getU1Code();
+                    int code4 = code.getU1Code();
+
+                    int index = code1 << 8 | code2;
+
+                    Object object = new LambdaEngine(method, index).createObject();
+
+                    frame.getStack().push(new StackValue(BasicType.T_OBJECT, object));
+
+                    break;
+                }
                 case Bytecodes.INVOKESTATIC: { //调用类静态方法
                     logger.info("执行指令：INVOKESTATIC");
 
@@ -198,6 +214,70 @@ public class BytecodeInterpreter extends StackObj {
                         // 调用
                         JavaNativeInterface.callStaticMethod(methodID);
                     }
+                    break;
+                }
+                case Bytecodes.INVOKEINTERFACE:{ // 调用接口方法
+                    logger.info("执行指令: INVOKEINTERFACE");
+
+                    short operand = code.getUnsignedShort();
+
+                    /**
+                     * 这个参数记录了调用的方法的参数个数：long、double记2,其他记1
+                     * 其实没太大必要，这个数据可以通过解析函数描述符获得
+                     * 为什么还存在呢？历史原因
+                     */
+                    code.getU1Code();
+
+                    /**
+                     * 为额外的运算元预留空间（没看懂）
+                     * 也是历史原因，可以不用管
+                     */
+                    code.getU1Code();
+
+                    // 获取类名、方法名、方法签名
+                    String className = method.getBelongKlass().getConstantPool().getClassNameByMethodInfo(operand);
+                    String methodName = method.getBelongKlass().getConstantPool().getMethodNameByMethodInfo(operand);
+                    String descriptorName = method.getBelongKlass().getConstantPool().getDescriptorNameByMethodInfo(operand);
+
+                    logger.info("执行接口方法: " + className + ":" + methodName + "#" + descriptorName);
+
+                    boolean self = false;
+                    if (self) {
+                        throw new Error("未做处理");
+                    } else {
+                        DescriptorStream2 descriptorStream = new DescriptorStream2(descriptorName);
+                        descriptorStream.parseMethod();
+
+                        Object[] params = descriptorStream.getParamsVal(frame);
+                        Class[] paramsClass = descriptorStream.getParamsType();
+
+                        Object obj = frame.getStack().pop().getObject();
+
+                        try {
+                            Class<?> clazz = Class.forName(className.replace('/', '.'));
+                            Method fun = clazz.getMethod(methodName, paramsClass);
+
+                            /**
+                             * 处理：
+                             *  1、无返回值
+                             *  2、有返回值
+                             */
+                            if (BasicType.T_VOID == descriptorStream.getReturnElement().getType()) {
+                                fun.invoke(obj, params);
+                            } else {
+                                descriptorStream.pushField(fun.invoke(obj, params), frame);
+                            }
+                        } catch (NoSuchMethodException e) {
+                            e.printStackTrace();
+                        } catch (IllegalAccessException e) {
+                            e.printStackTrace();
+                        } catch (InvocationTargetException e) {
+                            e.printStackTrace();
+                        } catch (ClassNotFoundException e) {
+                            e.printStackTrace();
+                        }
+                    }
+
                     break;
                 }
                 case Bytecodes.INVOKESPECIAL: { // 调用实例方法，专门调用父类方法，私有方法和实例初始化方法
@@ -332,7 +412,17 @@ public class BytecodeInterpreter extends StackObj {
                             e.printStackTrace();
                         }
                     } else {
+                        InstanceKlass klass = BootClassLoader.findLoadedKlass(className.replace('/', '.'));
+                        if (null == klass) {
+                            throw new Error("类还未加载: " + className);
+                        }
 
+                        MethodInfo methodID = JavaNativeInterface.getMethodID(klass, methodName, descriptorName);
+                        if (null == methodID) {
+                            throw new Error("不存在的方法: " + methodName + "#" + descriptorName);
+                        }
+
+                        JavaNativeInterface.callMethod(methodID);
                     }
 
                     break;
@@ -646,6 +736,14 @@ public class BytecodeInterpreter extends StackObj {
                     frame.getStack().push(value);
                     break;
                 }
+                case Bytecodes.ALOAD_2:{ // 从局部变量表加载一个reference类型值到操作数栈中
+                    logger.info("执行指令: ALOAD_2");
+                    // 从局部变量表取出数据
+                    StackValue value = frame.getLocals().get(2);
+                    // 压入栈
+                    frame.getStack().push(value);
+                    break;
+                }
                 case Bytecodes.ASTORE_0:{ // 将一个reference类型的数据保存到本地变量表中
                     logger.info("执行指令: ASTORE_0");
                     // 取出数据
@@ -660,6 +758,14 @@ public class BytecodeInterpreter extends StackObj {
                     StackValue value = frame.getStack().pop();
                     // 存入局部变量表
                     frame.getLocals().add(1, value);
+                    break;
+                }
+                case Bytecodes.ASTORE_2:{ // 将一个reference类型的数据保存到本地变量表中
+                    logger.info("执行指令: ASTORE_2");
+                    // 取出数据
+                    StackValue value = frame.getStack().pop();
+                    // 存入局部变量表
+                    frame.getLocals().add(2, value);
                     break;
                 }
                 case Bytecodes.ACONST_NULL:{ // 将一个null值入栈到操作数栈中

@@ -109,6 +109,10 @@ public class ClassFileParser {
             String attrName = (String) klass.getConstantPool().getDataMap().get(DataTranslate.byteToUnsignedShort(u2Arr));
             if (attrName.equals("SourceFile")) {
                 index = parseSourceFile(content, index, klass, attrName);
+            } else if (attrName.equals("InnerClasses")) {
+                index = parseInnerClasses(content, index, klass, attrName);
+            } else if (attrName.equals("BootstrapMethods")) {
+                index = parseBootstrapMethods(content, index, klass, attrName);
             } else {
                 throw new Error("无法识别的类属性: " + attrName);
             }
@@ -116,6 +120,133 @@ public class ClassFileParser {
 
         return klass;
     }
+
+    private static int parseBootstrapMethods(byte[] content, int index, InstanceKlass klass, String attrName) {
+        byte[] u2Arr = new byte[2];
+        byte[] u4Arr = new byte[4];
+
+        BootstrapMethods bootstrapMethods = new BootstrapMethods();
+        klass.getAttributeInfos().put(attrName, bootstrapMethods);
+
+        // name index
+        Stream.readU2Simple(content, index, u2Arr);
+        index += 2;
+
+        bootstrapMethods.setAttrNameIndex(DataTranslate.byteToUnsignedShort(u2Arr));
+        bootstrapMethods.setAttrName((String) klass.getConstantPool().getDataMap().get(bootstrapMethods.getAttrNameIndex()));
+
+        // length
+        Stream.readU4Simple(content, index, u4Arr);
+        index += 4;
+
+        bootstrapMethods.setAttrLength(DataTranslate.byteArrayToInt(u4Arr));
+
+        // inner classes num
+        Stream.readU2Simple(content, index, u2Arr);
+        index += 2;
+
+        bootstrapMethods.setNumBootstrapMethods(DataTranslate.byteToUnsignedShort(u2Arr));
+
+        logger.info("\t 第 " + klass.getAttributeInfos().size() + " 个属性: " +
+                "name: " + bootstrapMethods.getAttrName()
+                + ", num: " + bootstrapMethods.getNumBootstrapMethods());
+
+        for (int i = 0; i < bootstrapMethods.getNumBootstrapMethods(); i++) {
+            BootstrapMethods.Item item = bootstrapMethods.new Item();
+            bootstrapMethods.getBootstrapMethods().add(item);
+
+            // bootstrap method ref
+            Stream.readU2Simple(content, index, u2Arr);
+            index += 2;
+
+            item.setBootstrapMethodRef(DataTranslate.byteToUnsignedShort(u2Arr));
+
+            // num bootstrap arguments
+            Stream.readU2Simple(content, index, u2Arr);
+            index += 2;
+
+            item.setNumBootstrapArguments(DataTranslate.byteToUnsignedShort(u2Arr));
+            item.initContainter();
+
+            // bootstrap arguments
+            for (int j = 0; j < item.getNumBootstrapArguments(); j++) {
+                Stream.readU2Simple(content, index, u2Arr);
+                index += 2;
+
+                item.getBootstrapArguments()[j] = DataTranslate.byteToUnsignedShort(u2Arr);
+            }
+        }
+
+        return index;
+    }
+
+    private static int parseInnerClasses(byte[] content, int index, InstanceKlass klass, String attrName) {
+        byte[] u2Arr = new byte[2];
+        byte[] u4Arr = new byte[4];
+
+        InnerClasses innerClasses = new InnerClasses();
+        klass.getAttributeInfos().put(attrName, innerClasses);
+
+        // name index
+        Stream.readU2Simple(content, index, u2Arr);
+        index += 2;
+
+        innerClasses.setAttrNameIndex(DataTranslate.byteToUnsignedShort(u2Arr));
+        innerClasses.setAttrName((String) klass.getConstantPool().getDataMap().get(innerClasses.getAttrNameIndex()));
+
+        // length
+        Stream.readU4Simple(content, index, u4Arr);
+        index += 4;
+
+        innerClasses.setAttrLength(DataTranslate.byteArrayToInt(u4Arr));
+
+        // inner classes num
+        Stream.readU2Simple(content, index, u2Arr);
+        index += 2;
+
+        innerClasses.setNumOfClasses(DataTranslate.byteToUnsignedShort(u2Arr));
+
+        logger.info("\t 第 " + klass.getAttributeInfos().size() + " 个属性: " +
+                "name: " + innerClasses.getAttrName()
+                + ", classes num: " + innerClasses.getNumOfClasses());
+
+        for (int i = 0; i < innerClasses.getNumOfClasses(); i++) {
+            InnerClasses.Item item = innerClasses.new Item();
+            innerClasses.getClasses().add(item);
+
+            // inner class info index
+            Stream.readU2Simple(content, index, u2Arr);
+            index += 2;
+
+            item.setInterClassInfoIndex(DataTranslate.byteToUnsignedShort(u2Arr));
+
+            // outer class info index
+            Stream.readU2Simple(content, index, u2Arr);
+            index += 2;
+
+            item.setOuterClassInfoIndex(DataTranslate.byteToUnsignedShort(u2Arr));
+
+            // inner class index
+            Stream.readU2Simple(content, index, u2Arr);
+            index += 2;
+
+            item.setInnerNameIndex(DataTranslate.byteToUnsignedShort(u2Arr));
+
+            // access flags
+            Stream.readU2Simple(content, index, u2Arr);
+            index += 2;
+
+            item.setAccessFlags(new AccessFlags(DataTranslate.byteToUnsignedShort(u2Arr)));
+
+            logger.info("\t\t inner class index: " + item.getInterClassInfoIndex()
+                    + ", outer class index: " + item.getOuterClassInfoIndex()
+                    + ", inner name index: " + item.getInnerNameIndex()
+                    + ", access flag: " + item.getAccessFlags().getFlag());
+        }
+
+        return index;
+    }
+
 
 
     private static int parseInterface(byte[] content, InstanceKlass klass, int index) {
