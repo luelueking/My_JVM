@@ -428,6 +428,21 @@ public class BytecodeInterpreter extends StackObj {
                     break;
                 }
 
+                case Bytecodes.ATHROW: { // 抛出一个异常或错误
+                    logger.info("执行指令: ATHROW");
+
+                    Throwable throwable = (Throwable) frame.getStack().pop().getObject();
+
+                    try {
+                        throw throwable;
+                    } catch (Throwable e) {
+                        e.printStackTrace();
+                    }
+
+                    System.exit(-1);
+
+                    break;
+                }
                 case Bytecodes.AALOAD: { // 从数组中加载一个reference类型数据到操作数栈
                     logger.info("执行指令: AALOAD");
 

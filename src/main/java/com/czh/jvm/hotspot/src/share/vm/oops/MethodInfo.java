@@ -16,6 +16,7 @@ public class MethodInfo {
     private int attributesCount;
 
     private CodeAttributeInfo[] attributes;
+    private Exceptions exceptions;
 
     private String methodName;
     private DescriptorStream2 descriptor;
